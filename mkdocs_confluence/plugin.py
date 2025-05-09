@@ -10,11 +10,11 @@ import mimetypes
 import mistune
 import contextlib
 from time import sleep
-from mkdocs.config import config_options
 from mkdocs.plugins import BasePlugin
 from md2cf.confluence_renderer import ConfluenceRenderer
-from os import environ
 from pathlib import Path
+
+from mkdocs_confluence.config.mkdocs_confluence_config import MkdocsConfluenceConfig
 
 TEMPLATE_BODY = "<p> TEMPLATE </p>"
 
@@ -32,32 +32,25 @@ class DummyFile(object):
         pass
 
 
-class MkdocsWithConfluence(BasePlugin):
+class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
     _id = 0
-    config_scheme = (
-        ("host_url", config_options.Type(str, default=None)),
-        ("space", config_options.Type(str, default=None)),
-        ("parent_page_name", config_options.Type(str, default=None)),
-        ("username", config_options.Type(str, default=environ.get("JIRA_USERNAME", None))),
-        ("api_token", config_options.Type(str, default=environ.get("CONFLUENCE_API_TOKEN", None))), # If specified, password is ignored
-        ("password", config_options.Type(str, default=environ.get("JIRA_PASSWORD", None))),
-        ("enabled_if_env", config_options.Type(str, default=None)),
-        ("verbose", config_options.Type(bool, default=False)),
-        ("debug", config_options.Type(bool, default=False)),
-        ("dryrun", config_options.Type(bool, default=False)),
-    )
 
     def __init__(self):
         self.enabled = True
-        self.confluence_renderer = ConfluenceRenderer(use_xhtml=True)
-        self.confluence_mistune = mistune.Markdown(renderer=self.confluence_renderer)
         self.simple_log = False
         self.flen = 1
         self.session = requests.Session()
         self.page_attachments = {}
+        
+    def configure_renderer(self) :
+        strip_header = self.config["renderer_options"]["strip_header"]
+        if self.config["debug"]:
+            print(f"\nDEBUG    - Renderer Options: strip_header is set to '{strip_header}'\n")
+        self.confluence_renderer = ConfluenceRenderer(use_xhtml=True, strip_header=True)
+        self.confluence_mistune = mistune.Markdown(renderer=self.confluence_renderer)
 
     def on_nav(self, nav, config, files):
-        MkdocsWithConfluence.tab_nav = []
+        MkdocsConfluence.tab_nav = []
         navigation_items = nav.__repr__()
 
         for n in navigation_items.split("\n"):
@@ -79,7 +72,7 @@ class MkdocsWithConfluence(BasePlugin):
                     self.page_title = self.page_local_name
 
                 p = spaces + self.page_title
-                MkdocsWithConfluence.tab_nav.append(p)
+                MkdocsConfluence.tab_nav.append(p)
             if "Section" in n:
                 try:
                     self.section_title = self.__get_section_title(n)
@@ -95,7 +88,7 @@ class MkdocsWithConfluence(BasePlugin):
                     self.section_local_name = self.__get_section_title(n)
                     self.section_title = self.section_local_name
                 s = spaces + self.section_title
-                MkdocsWithConfluence.tab_nav.append(s)
+                MkdocsConfluence.tab_nav.append(s)
 
     def on_files(self, files, config):
         pages = files.documentation_pages()
@@ -146,7 +139,7 @@ class MkdocsWithConfluence(BasePlugin):
             self.dryrun = False
 
     def on_page_markdown(self, markdown, page, config, files):
-        MkdocsWithConfluence._id += 1
+        MkdocsConfluence._id += 1
         if self.config["api_token"]:
             self.session.auth = (self.config["username"], self.config["api_token"])
         else:
@@ -155,11 +148,11 @@ class MkdocsWithConfluence(BasePlugin):
         if self.enabled:
             if self.simple_log is True:
                 print("INFO    - Mkdocs With Confluence: Page export progress: [", end="", flush=True)
-                for i in range(MkdocsWithConfluence._id):
+                for i in range(MkdocsConfluence._id):
                     print("#", end="", flush=True)
-                for j in range(self.flen - MkdocsWithConfluence._id):
+                for j in range(self.flen - MkdocsConfluence._id):
                     print("-", end="", flush=True)
-                print(f"] ({MkdocsWithConfluence._id} / {self.flen})", end="\r", flush=True)
+                print(f"] ({MkdocsConfluence._id} / {self.flen})", end="\r", flush=True)
 
             if self.config["debug"]:
                 print(f"\nDEBUG    - Handling Page '{page.title}' (And Parent Nav Pages if necessary):\n")
@@ -276,7 +269,7 @@ class MkdocsWithConfluence(BasePlugin):
                             print(f"DEBUG    - ERR, Parents does not match: '{parent}' =/= '{parent_name}' Aborting...")
                         return markdown
                     self.update_page(page.title, confluence_body)
-                    for i in MkdocsWithConfluence.tab_nav:
+                    for i in MkdocsConfluence.tab_nav:
                         if page.title in i:
                             print(f"INFO    - Mkdocs With Confluence: {i} *UPDATE*")
                 else:
@@ -304,7 +297,7 @@ class MkdocsWithConfluence(BasePlugin):
                                 )
                             body = TEMPLATE_BODY.replace("TEMPLATE", parent1)
                             self.add_page(parent1, main_parent_id, body)
-                            for i in MkdocsWithConfluence.tab_nav:
+                            for i in MkdocsConfluence.tab_nav:
                                 if parent1 in i:
                                     print(f"INFO    - Mkdocs With Confluence: {i} *NEW PAGE*")
                             time.sleep(1)
@@ -316,7 +309,7 @@ class MkdocsWithConfluence(BasePlugin):
                             )
                         body = TEMPLATE_BODY.replace("TEMPLATE", parent)
                         self.add_page(parent, second_parent_id, body)
-                        for i in MkdocsWithConfluence.tab_nav:
+                        for i in MkdocsConfluence.tab_nav:
                             if parent in i:
                                 print(f"INFO    - Mkdocs With Confluence: {i} *NEW PAGE*")
                         time.sleep(1)
@@ -338,7 +331,7 @@ class MkdocsWithConfluence(BasePlugin):
                     self.add_page(page.title, parent_id, confluence_body)
 
                     print(f"Trying to ADD page '{page.title}' to parent0({parent}) ID: {parent_id}")
-                    for i in MkdocsWithConfluence.tab_nav:
+                    for i in MkdocsConfluence.tab_nav:
                         if page.title in i:
                             print(f"INFO    - Mkdocs With Confluence: {i} *NEW PAGE*")
 
@@ -415,7 +408,7 @@ class MkdocsWithConfluence(BasePlugin):
         page_id = self.find_page_id(page_name)
         if page_id:
             file_hash = self.get_file_sha1(filepath)
-            attachment_message = f"MKDocsWithConfluence [v{file_hash}]"
+            attachment_message = f"MkdocsConfluence [v{file_hash}]"
             existing_attachment = self.get_attachment(page_id, filepath)
             if existing_attachment:
                 file_hash_regex = re.compile(r"\[v([a-f0-9]{40})]$")

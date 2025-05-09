@@ -2,3 +2,4 @@ black
 flake8
 nose
 pytest-cov
+mkdocs>=1.4.0
