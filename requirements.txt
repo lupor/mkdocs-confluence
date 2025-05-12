@@ -1,4 +1,4 @@
 pre-commit
 mime
-mistune
-md2cf
+mistune>=3.1.3
+

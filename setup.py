@@ -10,7 +10,7 @@ setup(
     author_email="lupo.ribi@gmail.com",
     license="MIT",
     python_requires=">=3.6",
-    install_requires=["mkdocs>=1.6.1", "jinja2", "mistune", "md2cf", "requests"],
+    install_requires=["mkdocs>=1.6.1", "jinja2", "requests", "mistune>=3.1.3"],
     packages=find_packages(),
     entry_points={"mkdocs.plugins": ["mkdocs-confluence = mkdocs_confluence.plugin:MkdocsConfluence"]},
 )

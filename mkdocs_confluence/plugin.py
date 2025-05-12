@@ -1,3 +1,4 @@
+from mkdocs.plugins import get_plugin_logger
 import time
 import os
 import hashlib
@@ -11,13 +12,14 @@ import mistune
 import contextlib
 from time import sleep
 from mkdocs.plugins import BasePlugin
-from md2cf.confluence_renderer import ConfluenceRenderer
 from pathlib import Path
 
 from mkdocs_confluence.config.mkdocs_confluence_config import MkdocsConfluenceConfig
+from mkdocs_confluence.renderer.confluence_xhtml_renderer import ConfluenceXhtmlRenderer
 
 TEMPLATE_BODY = "<p> TEMPLATE </p>"
 
+log = get_plugin_logger(__name__)
 
 @contextlib.contextmanager
 def nostdout():
@@ -44,10 +46,9 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         
     def configure_renderer(self) :
         strip_header = self.config["renderer_options"]["strip_header"]
-        if self.config["debug"]:
-            print(f"\nDEBUG    - Renderer Options: strip_header is set to '{strip_header}'\n")
-        self.confluence_renderer = ConfluenceRenderer(use_xhtml=True, strip_header=True)
-        self.confluence_mistune = mistune.Markdown(renderer=self.confluence_renderer)
+        log.debug("Configuring renderer with strip_header=%s", strip_header)
+        self.confluence_renderer = ConfluenceXhtmlRenderer(strip_header=strip_header)
+        self.confluence_mistune = mistune.create_markdown(renderer=self.confluence_renderer, plugins=['table', 'strikethrough', 'task_lists',])
 
     def on_nav(self, nav, config, files):
         MkdocsConfluence.tab_nav = []
@@ -99,41 +100,15 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
             print("ERR: You have no documentation pages" "in the directory tree, please add at least one!")
 
     def on_post_template(self, output_content, template_name, config):
-        if self.config["verbose"] is False and self.config["debug"] is False:
-            self.simple_log = True
-            print("INFO    -  Mkdocs With Confluence: Start exporting markdown pages... (simple logging)")
-        else:
-            self.simple_log = False
+        log.info("Start exporting markdown pages...")
 
     def on_config(self, config):
-        if "enabled_if_env" in self.config:
-            env_name = self.config["enabled_if_env"]
-            if env_name:
-                self.enabled = os.environ.get(env_name) == "1"
-                if not self.enabled:
-                    print(
-                        "WARNING - Mkdocs With Confluence: Exporting MKDOCS pages to Confluence turned OFF: "
-                        f"(set environment variable {env_name} to 1 to enable)"
-                    )
-                    return
-                else:
-                    print(
-                        "INFO    -  Mkdocs With Confluence: Exporting MKDOCS pages to Confluence "
-                        f"turned ON by var {env_name}==1!"
-                    )
-                    self.enabled = True
-            else:
-                print(
-                    "WARNING -  Mkdocs With Confluence: Exporting MKDOCS pages to Confluence turned OFF: "
-                    f"(set environment variable {env_name} to 1 to enable)"
-                )
-                return
-        else:
-            print("INFO    -  Mkdocs With Confluence: Exporting MKDOCS pages to Confluence turned ON by default!")
-            self.enabled = True
-
+        self.configure_renderer()
+        
+        self.enabled = self.is_enabled()
+        
         if self.config["dryrun"]:
-            print("WARNING -  Mkdocs With Confluence - DRYRUN MODE turned ON")
+            log.warning("DRYRUN MODE turned ON")
             self.dryrun = True
         else:
             self.dryrun = False
@@ -233,6 +208,7 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 )
                 new_markdown = re.sub(r'" style="page-break-inside: avoid;">', '"/></ac:image></p>', new_markdown)
                 confluence_body = self.confluence_mistune(new_markdown)
+                log.debug("Generated confluence body %s", confluence_body)
                 f.write(confluence_body)
                 if self.config["debug"]:
                     print(confluence_body)
@@ -619,3 +595,30 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         start = time.time()
         while not condition and time.time() - start < timeout:
             time.sleep(interval)
+            
+    def is_enabled(self):
+        has_environment_flag = "enabled_if_env" in self.config
+        flag_name = self.config["enabled_if_env"]
+        
+        if len(flag_name) == 0:
+            log.warning("no valid environement variable name provided with 'enabled_if_env' will default to true")
+            self.enabled = True
+            return  
+        
+        flag_enabled = has_environment_flag and flag_name and os.environ.get(flag_name) == "1"
+        
+        
+        if has_environment_flag and flag_enabled == False:
+            log.warning(
+                "Export to Confluence turned OFF: "
+                f"(set environment variable {flag_name} to 1 to enable)"
+            )
+        
+        if has_environment_flag and flag_enabled:
+            log.info(
+                "Export to Confluence "
+                f"turned ON by var {flag_name}==1!"
+            )
+        
+        self.enabled = flag_enabled if has_environment_flag else True
+        return
