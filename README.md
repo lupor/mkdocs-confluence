@@ -40,7 +40,7 @@ Use following config and adjust it according to your needs:
         #verbose: true
         #debug: true
         dryrun: true
-```
+        image_height: (Optional) The height of images in Confluence pages. Default is `350`.
 
 ## Parameters:
 

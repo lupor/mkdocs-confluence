@@ -45,6 +45,7 @@ class MkdocsWithConfluence(BasePlugin):
         ("verbose", config_options.Type(bool, default=False)),
         ("debug", config_options.Type(bool, default=False)),
         ("dryrun", config_options.Type(bool, default=False)),
+        ("image_height", config_options.Type(int, default=350)),  # Default height is 350
     )
 
     def __init__(self):
@@ -235,9 +236,8 @@ class MkdocsWithConfluence(BasePlugin):
                 except AttributeError as e:
                     if self.config["debug"]:
                         print(f"DEBUG    - WARN(({e}): No images found in markdown. Proceed..")
-                new_markdown = re.sub(
-                    r'<img src="file:///tmp/', '<p><ac:image ac:height="350"><ri:attachment ri:filename="', markdown
-                )
+                image_height = self.config.get("image_height", 350)  # Default to 350 if not set
+                new_markdown = re.sub(r'<img src="file:///tmp/', f'<p><ac:image ac:height="{image_height}"><ri:attachment ri:filename="', markdown)
                 new_markdown = re.sub(r'" style="page-break-inside: avoid;">', '"/></ac:image></p>', new_markdown)
                 confluence_body = self.confluence_mistune(new_markdown)
                 f.write(confluence_body)
