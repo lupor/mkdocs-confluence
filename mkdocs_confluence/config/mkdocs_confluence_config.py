@@ -1,9 +1,22 @@
+import contextlib
+import sys
 from mkdocs.plugins import get_plugin_logger
 import os
 from mkdocs.config import base, config_options
 from os import environ
 
 log = get_plugin_logger(__name__)
+
+@contextlib.contextmanager
+def nostdout():
+    save_stdout = sys.stdout
+    sys.stdout = DummyFile()
+    yield
+    sys.stdout = save_stdout
+
+class DummyFile(object):
+    def write(self, x):
+        pass
 
 class _RendererOptions(base.Config):
     strip_header = config_options.Type(bool, default=False)
