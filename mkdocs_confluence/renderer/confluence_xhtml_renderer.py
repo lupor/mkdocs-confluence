@@ -99,7 +99,7 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
 
     def image(self, alt: str, url: str, title: Optional[str] = None) -> str:
         log.debug("ENTER image")
-        attributes = {"alt": alt}
+        attributes = {"alt": alt, "style": "max-width: 100%; height:auto", "align": "center"}
         if title:
             attributes["title"] = title
 
@@ -170,6 +170,19 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
 
     def block_quote(self, text, **attrs):
         return f'<blockquote>{text}</blockquote>'
+    
+    
+    def inline_html(self, html):
+        # check if the html is a img tag
+        log.debug(f"ENTER block_html")
+        log.debug(f"block_html: {html}")
+        if html.startswith("<img") and html.endswith("/>"):
+            src = html.split('src="')[1].split('"')[0]
+            title = html.split('title="')[1].split('"')[0] if 'title="' in html else ''
+            alt = html.split('alt="')[1].split('"')[0] if 'alt="' in html else ''
+            return self.image(alt=alt, url=src, title=title)
+        # otherwise return the html as is
+        return html 
 
     def thematic_break(self, **attrs):
         return '<hr />'

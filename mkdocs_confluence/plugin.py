@@ -180,24 +180,11 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 if self.config["debug"]:
                     print(f"DEBUG    - PARENT0: {parent}, PARENT1: {parent1}, MAIN PARENT: {main_parent}")
 
-                tf = tempfile.NamedTemporaryFile(delete=False)
-                f = open(tf.name, "w")
+                log.debug(f"Before markdown conversion: {markdown}")
 
-            
-                new_markdown = re.sub(
-                    r'<img src="file:///tmp/', '<p><ac:image ac:height="350"><ri:attachment ri:filename="', markdown
-                )
-                new_markdown = re.sub(r'" style="page-break-inside: avoid;">', '"/></ac:image></p>', new_markdown)
-                confluence_body = self.confluence_mistune(new_markdown)
-                log.debug("Generated confluence body %s", confluence_body)
-                f.write(confluence_body)
-                if self.config["debug"]:
-                    print(confluence_body)
-                page_name = page.title
-                new_name = "confluence_page_" + page_name.replace(" ", "_") + ".html"
-                shutil.copy(f.name, new_name)
-                f.close()
+                confluence_body = self.confluence_mistune(markdown)
 
+                
                 if self.config["debug"]:
                     print(
                         f"\nDEBUG    - UPDATING PAGE TO CONFLUENCE, DETAILS:\n"
@@ -328,11 +315,11 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         site_dir = config.get("site_dir")
         attachments = self.page_attachments.get(page.title, [])
 
-        log.debug("UPLOADING ATTACHMENTS TO CONFLUENCE FOR {page.title}, DETAILS:")
-        log.debug("FILES: {attachments}  \n")
+        log.debug("on_post_page: UPLOADING ATTACHMENTS TO CONFLUENCE FOR {page.title}, DETAILS:")
+        log.debug("on_post_page: FILES: {attachments}  \n")
             
         for attachment in attachments:
-            log.debug("Looking for {attachment} in {site_dir}")   
+            log.debug("on_post_page: Looking for {attachment} in {site_dir}")   
             for p in Path(site_dir).rglob(f"*{attachment}"):
                 self.confluence_api.upsert_attachment(page.title, p)
         return output
