@@ -118,6 +118,7 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
 
     def on_page_markdown(self, markdown, page, config, files):
         MkdocsConfluence._id += 1
+        failed_pages = []  # Track failed pages
 
         if self.enabled:
             if self.simple_log is True:
@@ -196,6 +197,29 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                     )
 
                 page_id = self.confluence_api.find_page_id(page.title)
+                if page_id:
+                    success = self.confluence_api.update_page(page.title, confluence_body)
+                    if not success:
+                        failed_pages.append((page.title, "Update failed"))
+                else:
+                    parent_id = self.confluence_api.find_page_id(parent)
+                    if not parent_id:
+                        # Parent page does not exist, create it under main_parent
+                        main_parent_id = self.confluence_api.find_page_id(main_parent)
+                        if not main_parent_id:
+                            # If main parent also doesn't exist, create it at root (space)
+                            main_parent_id = None
+                        parent_body = TEMPLATE_BODY.replace("TEMPLATE", parent)
+                        created = self.confluence_api.add_page(parent, main_parent_id, parent_body)
+                        if created:
+                            parent_id = self.confluence_api.find_page_id(parent)
+                            log.info(f"Created missing parent page: {parent}")
+                        else:
+                            failed_pages.append((parent, "Failed to create parent page"))
+                            return markdown
+                    success = self.confluence_api.add_page(page.title, parent_id, confluence_body)
+                    if not success:
+                        failed_pages.append((page.title, "Add failed"))
                 if page_id is not None:
                     if self.config["debug"]:
                         print(
@@ -287,6 +311,14 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 if self.config["debug"]:
                     print(f"DEBUG    - ERR({e}): Exception error!")
                 return markdown
+            except Exception as e:
+                log.error(f"on_page_markdown: Exception for {page.title}. Error: {e}")
+                failed_pages.append((page.title, str(e)))
+        # Log failed pages
+        if failed_pages:
+            log.error("Failed to publish the following pages:")
+            for title, error in failed_pages:
+                log.error(f"Page: {title}, Error: {error}")
 
         return markdown
 
@@ -380,4 +412,3 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
             password,
             self.dryrun
         )
-  
