@@ -2,6 +2,7 @@ import hashlib
 import mimetypes
 import os
 from pathlib import Path
+import re
 import requests
 from mkdocs.plugins import get_plugin_logger
 import time
@@ -104,23 +105,23 @@ class ConfluenceAPI:
             else:
                 log.info("ERR!")
                 
-    def find_page_id(self, page_name):
-        log.debug("Find Page ID: PAGE NAME: {page_name}")
+    def find_page_id(self, page_name, parent_id=None):
+        log.debug(f"Find Page ID: PAGE NAME: {page_name}")
         name_confl = page_name.replace(" ", "+")
-        url = self.base_url + "?title=" + name_confl + "&spaceKey=" + self.space + "&expand=history"
-        log.debug("find_page_id URL: {url}")
-        
+        url = self.base_url + "?title=" + name_confl + "&spaceKey=" + self.space + "&expand=ancestors"
+        log.debug(f"find_page_id URL: {url}")
         response = requests.get(url, auth=self.auth)
         response.raise_for_status()
         with nostdout():
             response_json = response.json()
-        
-        if response_json["results"]:
-            log.debug(f"ID: {response_json['results'][0]['id']}")  
-            return response_json["results"][0]["id"]
-        else:
-            log.debug("PAGE DOES NOT EXIST")  
-            return None
+        for result in response_json.get("results", []):
+            if parent_id is None:
+                return result["id"]
+            ancestors = result.get("ancestors", [])
+            if ancestors and str(ancestors[-1]["id"]) == str(parent_id):
+                return result["id"]
+        log.debug("PAGE DOES NOT EXIST under the specified parent")
+        return None
         
     def find_parent_name_of_page(self, name):
         log.debug(f"find_parent_name_of_page: Find PARENT OF PAGE, PAGE NAME: {name}")
@@ -145,7 +146,7 @@ class ConfluenceAPI:
                 hash_sha1.update(chunk)
         return hash_sha1.hexdigest()
     
-    def add_page(self, page_name, parent_page_id, page_content_in_storage_format, retries=3):
+    def add_page(self, page_name, parent_page_id, page_content_in_storage_format):
         log.info(f"add_page: {page_name} - *NEW PAGE*")
         url = self.base_url + "/"
         headers = {"Content-Type": "application/json"}
@@ -159,22 +160,28 @@ class ConfluenceAPI:
             data["ancestors"] = [{"id": parent_page_id}]
         # else: do not include ancestors at all
 
-        for attempt in range(retries):
-            try:
-                if not self.dryrun:
-                    response = requests.post(url, json=data, headers=headers, auth=self.auth)
-                    response.raise_for_status()
-                    if response.status_code == 200:
-                        log.info("add_page: OK Successfully added page")
-                        return True
-            except Exception as e:
-                log.error(f"add_page: Attempt {attempt + 1} failed for {page_name}. Error: {e}")
-                time.sleep(2)  # Wait before retrying
+        try:
+            if not self.dryrun:
+                response = requests.post(url, json=data, headers=headers, auth=self.auth)
+                response.raise_for_status()
+                if response.status_code == 200:
+                    log.info("add_page: OK Successfully added page")
+                    # Print the final Confluence link
+                    page_id = response.json().get("id")
+                    if page_id:
+                        # Remove /rest/api/content/ from base_url to get the site root
+                        site_root = self.base_url.split("/rest/api/content")[0]
+                        page_url = f"{site_root}/pages/viewpage.action?pageId={page_id}"
+                        log.info(f"Confluence page published: {page_url}")
+                    return True
+        except Exception as e:
+            #log.error(f"add_page: Failed to add page {page_name}. Error: {e}")
+            return False
 
-        log.error(f"add_page: Failed to add page {page_name} after {retries} attempts.")
+        log.error(f"add_page: Failed to add page {page_name}.")
         return False
 
-    def update_page(self, page_name, page_content_in_storage_format, retries=3):
+    def update_page(self, page_name, page_content_in_storage_format):
         page_id = self.find_page_id(page_name)
         if not page_id:
             log.error(f"update_page: PAGE DOES NOT EXIST for {page_name}")
@@ -193,19 +200,24 @@ class ConfluenceAPI:
             "version": {"number": page_version},
         }
 
-        for attempt in range(retries):
-            try:
-                if not self.dryrun:
-                    response = requests.put(url, json=data, headers=headers, auth=self.auth)
-                    response.raise_for_status()
-                    if response.status_code == 200:
-                        log.info("update_page: OK Successfully updated page")
-                        return True
-            except Exception as e:
-                log.error(f"update_page: Attempt {attempt + 1} failed for {page_name}. Error: {e}")
-                time.sleep(2)  # Wait before retrying
+        try:
+            if not self.dryrun:
+                response = requests.put(url, json=data, headers=headers, auth=self.auth)
+                response.raise_for_status()
+                if response.status_code == 200:
+                    log.info("update_page: OK Successfully updated page")
+                    # Print the final Confluence link
+                    page_id = response.json().get("id")
+                    if page_id:
+                        site_root = self.base_url.split("/rest/api/content")[0]
+                        page_url = f"{site_root}/pages/viewpage.action?pageId={page_id}"
+                        log.info(f"Confluence page published: {page_url}")
+                    return True
+        except Exception as e:
+            #log.error(f"update_page: Failed to update page {page_name}. Error: {e}")
+            return False
 
-        log.error(f"update_page: Failed to update page {page_name} after {retries} attempts.")
+        log.error(f"update_page: Failed to update page {page_name}.")
         return False
                     
     def find_page_version(self, page_name):

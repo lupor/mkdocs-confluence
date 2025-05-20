@@ -2,17 +2,11 @@ import logging
 from mkdocs.plugins import get_plugin_logger
 import time
 import os
-import hashlib
 import re
-import tempfile
-import shutil
-import requests
-import mimetypes
 import mistune
 from time import sleep
 from mkdocs.plugins import BasePlugin
 from pathlib import Path
-
 from mkdocs_confluence.config.mkdocs_confluence_config import *
 from mkdocs_confluence.confluence_api.confluence_api import ConfluenceAPI
 from mkdocs_confluence.renderer.confluence_xhtml_renderer import ConfluenceXhtmlRenderer
@@ -137,7 +131,6 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
             try:
                 log.debug("Get section first parent title...: ")
                 try:
-
                     parent = self.__get_section_title(page.ancestors[0].__repr__())
                 except IndexError as e:
                     if self.config["debug"]:
@@ -156,67 +149,65 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 else:
                     main_parent = self.config["space"]
 
-                if self.config["debug"]:
-                    print("DEBUG    - Get section second parent title...: ")
+                # Ensure the main parent exists first (using parent_page_name from config)
+                main_parent = self.config["parent_page_name"]
+                main_parent_id = self.confluence_api.find_page_id(main_parent)
+                if not main_parent_id:
+                    main_parent_body = TEMPLATE_BODY.replace("TEMPLATE", main_parent)
+                    created = self.confluence_api.add_page(main_parent, None, main_parent_body)
+                    if created:
+                        main_parent_id = self.confluence_api.find_page_id(main_parent)
+                        log.info(f"Created missing main parent page: {main_parent}")
+                    else:
+                        failed_pages.append((main_parent, "Failed to create main parent page"))
+                        return markdown
+
+                # --- Hierarchy fix: create all missing parents in nav chain ---
+                # Build the parent chain from nav ancestors (deepest to root)
+                parent_titles = []
                 try:
-                    parent1 = self.__get_section_title(page.ancestors[1].__repr__())
-                except IndexError as e:
-                    if self.config["debug"]:
-                        print(
-                            f"DEBUG    - ERR({e}) No second parent! Assuming "
-                            f"second parent is main parent: {main_parent}..."
-                        )
-                    parent1 = None
-                if self.config["debug"]:
-                    print(f"{parent}")
+                    for ancestor in page.ancestors:
+                        parent_title = self.__get_section_title(ancestor.__repr__())
+                        parent_titles.append(parent_title)
+                except Exception:
+                    pass
+                # Always start with the configured main parent
+                if not parent_titles or parent_titles[0] != self.config["parent_page_name"]:
+                    parent_titles = [self.config["parent_page_name"]] + parent_titles
+                # Create each parent in the chain if missing, always under the previous one
+                parent_id = None
+                for parent_title in parent_titles:
+                    pid = self.confluence_api.find_page_id(parent_title, parent_id)
+                    if not pid:
+                        parent_body = TEMPLATE_BODY.replace("TEMPLATE", parent_title)
+                        created = self.confluence_api.add_page(parent_title, parent_id, parent_body)
+                        if created:
+                            pid = self.confluence_api.find_page_id(parent_title, parent_id)
+                            log.info(f"Created missing parent page: {parent_title}")
+                        else:
+                            failed_pages.append((parent_title, f"Failed to create parent page in hierarchy"))
+                            return markdown
+                    parent_id = pid
+                # --- End hierarchy fix ---
 
-                if not parent1:
-                    parent1 = main_parent
-                    if self.config["debug"]:
-                        print(
-                            f"DEBUG    - ONLY ONE PARENT FOUND. ASSUMING AS A "
-                            f"FIRST NODE after main parent config {main_parent}"
-                        )
-
-                if self.config["debug"]:
-                    print(f"DEBUG    - PARENT0: {parent}, PARENT1: {parent1}, MAIN PARENT: {main_parent}")
-
-                log.debug(f"Before markdown conversion: {markdown}")
-
+                # Prepare the confluence body for the page
                 confluence_body = self.confluence_mistune(markdown)
 
-                
-                if self.config["debug"]:
-                    print(
-                        f"\nDEBUG    - UPDATING PAGE TO CONFLUENCE, DETAILS:\n"
-                        f"DEBUG    - HOST: {self.config['host_url']}\n"
-                        f"DEBUG    - SPACE: {self.config['space']}\n"
-                        f"DEBUG    - TITLE: {page.title}\n"
-                        f"DEBUG    - PARENT: {parent}\n"
-                        f"DEBUG    - BODY: {confluence_body}\n"
-                    )
-
-                page_id = self.confluence_api.find_page_id(page.title)
+                # Now publish the actual page under the last parent in the chain
+                page_id = self.confluence_api.find_page_id(page.title, parent_id)
                 if page_id:
                     success = self.confluence_api.update_page(page.title, confluence_body)
                     if not success:
                         failed_pages.append((page.title, "Update failed"))
                 else:
-                    parent_id = self.confluence_api.find_page_id(parent)
-                    if not parent_id:
-                        # Parent page does not exist, create it under main_parent
-                        main_parent_id = self.confluence_api.find_page_id(main_parent)
-                        if not main_parent_id:
-                            # If main parent also doesn't exist, create it at root (space)
-                            main_parent_id = None
-                        parent_body = TEMPLATE_BODY.replace("TEMPLATE", parent)
-                        created = self.confluence_api.add_page(parent, main_parent_id, parent_body)
-                        if created:
-                            parent_id = self.confluence_api.find_page_id(parent)
-                            log.info(f"Created missing parent page: {parent}")
-                        else:
-                            failed_pages.append((parent, "Failed to create parent page"))
-                            return markdown
+                    # Check if the page exists elsewhere in the space (wrong parent)
+                    page_id_anywhere = self.confluence_api.find_page_id(page.title)
+                    if page_id_anywhere:
+                        error_msg = (f"Page '{page.title}' already exists elsewhere in the space. "
+                                     f"Kindly change the name of it or ensure unique page names under the parent '{parent_titles[-1]}'.")
+                        log.error(error_msg)
+                        failed_pages.append((page.title, error_msg))
+                        return markdown
                     success = self.confluence_api.add_page(page.title, parent_id, confluence_body)
                     if not success:
                         failed_pages.append((page.title, "Add failed"))
@@ -244,57 +235,16 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                     if self.config["debug"]:
                         print(
                             f"DEBUG    - PAGE: {page.title}, PARENT0: {parent}, "
-                            f"PARENT1: {parent1}, MAIN PARENT: {main_parent}"
+                            f"PARENT1: {main_parent}"
                         )
                     parent_id = self.confluence_api.find_page_id(parent)
                     self.wait_until(parent_id, 1, 20)
-                    second_parent_id = self.confluence_api.find_page_id(parent1)
-                    self.wait_until(second_parent_id, 1, 20)
                     main_parent_id = self.confluence_api.find_page_id(main_parent)
                     if not parent_id:
-                        if not second_parent_id:
-                            main_parent_id = self.confluence_api.find_page_id(main_parent)
-                            if not main_parent_id:
-                                print("ERR: MAIN PARENT UNKNOWN. ABORTING!")
-                                return markdown
-
-                            if self.config["debug"]:
-                                print(
-                                    f"DEBUG    - Trying to ADD page '{parent1}' to "
-                                    f"main parent({main_parent}) ID: {main_parent_id}"
-                                )
-                            body = TEMPLATE_BODY.replace("TEMPLATE", parent1)
-                            self.confluence_api.add_page(parent1, main_parent_id, body)
-                            for i in MkdocsConfluence.tab_nav:
-                                if parent1 in i:
-                                    print(f"INFO    - Mkdocs With Confluence: {i} *NEW PAGE*")
-                            time.sleep(1)
-
-                        if self.config["debug"]:
-                            print(
-                                f"DEBUG    - Trying to ADD page '{parent}' "
-                                f"to parent1({parent1}) ID: {second_parent_id}"
-                            )
-                        body = TEMPLATE_BODY.replace("TEMPLATE", parent)
-                        self.confluence_api.add_page(parent, second_parent_id, body)
-                        for i in MkdocsConfluence.tab_nav:
-                            if parent in i:
-                                print(f"INFO    - Mkdocs With Confluence: {i} *NEW PAGE*")
-                        time.sleep(1)
-
-                    if parent_id is None:
-                        for i in range(11):
-                            while parent_id is None:
-                                try:
-                                    self.confluence_api.add_page(page.title, parent_id, confluence_body)
-                                except requests.exceptions.HTTPError:
-                                    print(
-                                        f"ERR    - HTTP error on adding page. It probably occured due to "
-                                        f"parent ID('{parent_id}') page is not YET synced on server. Retry nb {i}/10..."
-                                    )
-                                    sleep(5)
-                                    parent_id = self.confluence_api.find_page_id(parent)
-                                break
+                        main_parent_id = self.confluence_api.find_page_id(main_parent)
+                        if not main_parent_id:
+                            print("ERR: MAIN PARENT UNKNOWN. ABORTING!")
+                            return markdown
 
                     self.confluence_api.add_page(page.title, parent_id, confluence_body)
 
