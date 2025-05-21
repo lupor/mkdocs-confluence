@@ -191,7 +191,10 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 # --- End hierarchy fix ---
 
                 # Prepare the confluence body for the page
+                # Remove the first H1 if it matches the page title (to avoid duplication)
                 confluence_body = self.confluence_mistune(markdown)
+                h1_pattern = rf"^<h1>\s*{re.escape(page.title)}\s*</h1>\s*"
+                confluence_body = re.sub(h1_pattern, "", confluence_body, flags=re.IGNORECASE | re.MULTILINE)
 
                 # Now publish the actual page under the last parent in the chain
                 page_id = self.confluence_api.find_page_id(page.title, parent_id)
