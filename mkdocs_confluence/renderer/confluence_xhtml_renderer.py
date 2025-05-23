@@ -1,10 +1,11 @@
 from mkdocs.plugins import get_plugin_logger
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional
 from urllib.parse import unquote, urlparse
 import uuid
 import mistune
 from mistune.renderers.html import HTMLRenderer
+import os
 
 log = get_plugin_logger(__name__)
 
@@ -67,6 +68,7 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
         strip_header=False,
         remove_text_newlines=False,
         enable_relative_links=False,
+        internal_link_map: Optional[Dict[str, str]] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -78,6 +80,7 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
         self.title = None
         self.enable_relative_links = enable_relative_links
         self.relative_links: List[RelativeLink] = list()
+        self.internal_link_map = internal_link_map or {}
 
     def reinit(self):
         self.attachments = list()
@@ -118,29 +121,50 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
 
         return root_element.render()
 
+    def set_internal_link_map(self, link_map: Dict[str, str]):
+        """Set or update the internal link mapping."""
+        self.internal_link_map = link_map or {}
+        log.debug(f"Internal link map keys: {list(self.internal_link_map.keys())}")
+
+    def debug_print_internal_link_map(self):
+        for k, v in self.internal_link_map.items():
+            print(f"LINK MAP: {k} -> {v}")
+
     def link(self, text, url, title=None):
-        log.debug("ENTER link")
         parsed_link = urlparse(url)
+        # Check for internal markdown link
         if (
-            self.enable_relative_links
-            and (not parsed_link.scheme and not parsed_link.netloc)
-            and parsed_link.path
+            self.internal_link_map and
+            (not parsed_link.scheme and not parsed_link.netloc) and
+            parsed_link.path
         ):
-            # relative link
-            replacement_link = f"md2cf-internal-link-{uuid.uuid4()}"
-            self.relative_links.append(
-                RelativeLink(
-                    # make sure to unquote the url as relative paths
-                    # might have escape sequences
-                    path=unquote(parsed_link.path),
-                    replacement=replacement_link,
-                    fragment=parsed_link.fragment,
-                    original=url,
-                    escaped_original=mistune.escape_link(url),
-                )
-            )
-            link = replacement_link
-        return f'<a href="{link}">{text}</a>'
+            norm_path = parsed_link.path.lstrip("./\\")
+            base = os.path.basename(norm_path)
+            candidates = [
+                url,  # the raw url as written in markdown
+                norm_path,
+                base,
+                base[:-3] if base.endswith('.md') else base,
+                norm_path[:-3] if norm_path.endswith('.md') else norm_path,
+                './' + base,
+                './' + (base[:-3] if base.endswith('.md') else base),
+                './' + norm_path,
+                './' + (norm_path[:-3] if norm_path.endswith('.md') else norm_path),
+            ]
+            print(f"DEBUG: candidates: {candidates}")
+            print(f"DEBUG: internal_link_map: {self.internal_link_map}")
+            confluence_url = None
+            for key in candidates:
+                if key in self.internal_link_map:
+                    print(f"DEBUG: Found internal link mapping: {key} -> {self.internal_link_map[key]}")
+                    confluence_url = self.internal_link_map[key]
+                    break
+            if confluence_url:
+                if parsed_link.fragment:
+                    confluence_url += f"#{parsed_link.fragment}"
+                return f'<a href="{confluence_url}">{text}</a>'
+        # Default: external or unhandled link
+        return f'<a href="{url}">{text}</a>'
 
     def list(self, text, ordered, **attrs):
         log.debug("ENTER list")

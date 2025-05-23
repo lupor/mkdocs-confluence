@@ -17,6 +17,7 @@ class ConfluenceAPI:
         self.space = space
         self.auth = (username, password)
         self.dryrun = dryrun
+        self.page_link_map = {}
         
 
     def upsert_attachment(self, page_name, filepath):
@@ -106,6 +107,8 @@ class ConfluenceAPI:
                 log.info("ERR!")
                 
     def find_page_id(self, page_name, parent_id=None):
+        if page_name is None:
+            return None
         log.debug(f"Find Page ID: PAGE NAME: {page_name}")
         name_confl = page_name.replace(" ", "+")
         url = self.base_url + "?title=" + name_confl + "&spaceKey=" + self.space + "&expand=ancestors"
@@ -173,9 +176,14 @@ class ConfluenceAPI:
                         site_root = self.base_url.split("/rest/api/content")[0]
                         page_url = f"{site_root}/pages/viewpage.action?pageId={page_id}"
                         log.info(f"Confluence page published: {page_url}")
+                        # --- Store mapping for internal links ---
+                        if not hasattr(self, 'page_link_map'):
+                            self.page_link_map = {}
+                        self.page_link_map[page_name] = page_url
+                        print(f"DEBUG: Published page mapping: {page_name} -> {page_url}")
+                        print(f"DEBUG: Current page link map: {self.page_link_map}")
                     return True
         except Exception as e:
-            #log.error(f"add_page: Failed to add page {page_name}. Error: {e}")
             return False
 
         log.error(f"add_page: Failed to add page {page_name}.")
@@ -212,6 +220,12 @@ class ConfluenceAPI:
                         site_root = self.base_url.split("/rest/api/content")[0]
                         page_url = f"{site_root}/pages/viewpage.action?pageId={page_id}"
                         log.info(f"Confluence page published: {page_url}")
+                        # --- Store mapping for internal links ---
+                        if not hasattr(self, 'page_link_map'):
+                            self.page_link_map = {}
+                        self.page_link_map[page_name] = page_url
+                        print(f"DEBUG: Published page mapping: {page_name} -> {page_url}")
+                        print(f"DEBUG: Current page link map: {self.page_link_map}")
                     return True
         except Exception as e:
             #log.error(f"update_page: Failed to update page {page_name}. Error: {e}")

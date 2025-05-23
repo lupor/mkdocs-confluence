@@ -10,6 +10,7 @@ from pathlib import Path
 from mkdocs_confluence.config.mkdocs_confluence_config import *
 from mkdocs_confluence.confluence_api.confluence_api import ConfluenceAPI
 from mkdocs_confluence.renderer.confluence_xhtml_renderer import ConfluenceXhtmlRenderer
+from mkdocs_confluence.renderer.internal_link_mapper import rewrite_internal_links
 
 TEMPLATE_BODY = "<p> TEMPLATE </p>"
 
@@ -23,8 +24,13 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         self.simple_log = False
         self.flen = 1
         self.page_attachments = {}
+        self.internal_link_map = None
 
     def on_nav(self, nav, config, files):
+        # Defer building the internal link map until after all pages are created
+        self._nav = nav
+        self._files = files
+        self._config = config
         MkdocsConfluence.tab_nav = []
         navigation_items = nav.__repr__()
         for n in navigation_items.split("\n"):
@@ -112,7 +118,15 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
 
     def on_page_markdown(self, markdown, page, config, files):
         MkdocsConfluence._id += 1
+        print("calling on_page_markdown")
         failed_pages = []  # Track failed pages
+        # Always get the latest page_link_map from the ConfluenceAPI instance
+        self.internal_link_map = getattr(self.confluence_api, 'page_link_map', {})
+        print(f"DEBUG - internal_link_map from plugin: {self.internal_link_map}")
+        # Rewrite internal links in the markdown before rendering
+        if self.internal_link_map:
+            from mkdocs_confluence.renderer.internal_link_mapper import rewrite_internal_links
+            markdown = rewrite_internal_links(markdown, self.internal_link_map)
 
         if self.enabled:
             if self.simple_log is True:
