@@ -74,9 +74,9 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         pages = files.documentation_pages()
         try:
             self.flen = len(pages)
-            print(f"Number of Files in directory tree: {self.flen}")
-        except 0:
-            print("ERR: You have no documentation pages" "in the directory tree, please add at least one!")
+            print(f"INFO    - Number of documentation pages found: {self.flen}")
+        except Exception:
+            print("ERR: You have no documentation pages in the directory tree, please add at least one!")
 
     def on_post_template(self, output_content, template_name, config):
         log.info("Start exporting markdown pages...")
@@ -118,11 +118,11 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
 
     def on_page_markdown(self, markdown, page, config, files):
         MkdocsConfluence._id += 1
-        print("calling on_page_markdown")
+        print(f"INFO    - Processing page: {page.title}")
         failed_pages = []  # Track failed pages
         # Always get the latest page_link_map from the ConfluenceAPI instance
         self.internal_link_map = getattr(self.confluence_api, 'page_link_map', {})
-        print(f"DEBUG - internal_link_map from plugin: {self.internal_link_map}")
+        log.debug(f"internal_link_map from plugin: {self.internal_link_map}")
         # Rewrite internal links in the markdown before rendering
         if self.internal_link_map:
             from mkdocs_confluence.renderer.internal_link_mapper import rewrite_internal_links
@@ -130,12 +130,8 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
 
         if self.enabled:
             if self.simple_log is True:
-                print("INFO    - Mkdocs With Confluence: Page export progress: [", end="", flush=True)
-                for i in range(MkdocsConfluence._id):
-                    print("#", end="", flush=True)
-                for j in range(self.flen - MkdocsConfluence._id):
-                    print("-", end="", flush=True)
-                print(f"] ({MkdocsConfluence._id} / {self.flen})", end="\r", flush=True)
+                print("INFO    - Mkdocs With Confluence: Page export progress:", end=" ", flush=True)
+                print(f"[{MkdocsConfluence._id} / {self.flen}]", end="\r", flush=True)
 
             log.debug("Handling Page '{page.title}' (And Parent Nav Pages if necessary):")
             if not all(self.config_scheme):
@@ -283,9 +279,9 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
                 failed_pages.append((page.title, str(e)))
         # Log failed pages
         if failed_pages:
-            log.error("Failed to publish the following pages:")
+            print("ERROR   - Failed to publish the following pages:")
             for title, error in failed_pages:
-                log.error(f"Page: {title}, Error: {error}")
+                print(f"ERROR   - Page: {title}, Error: {error}")
 
         return markdown
 
@@ -293,32 +289,20 @@ class MkdocsConfluence(BasePlugin[MkdocsConfluenceConfig]):
         attachments = []
         try:
             for match in re.finditer(r'img src="file://(.*)" s', markdown):
-                if self.config["debug"]:
-                    print(f"DEBUG    - FOUND IMAGE: {match.group(1)}")
                 attachments.append(match.group(1))
             for match in re.finditer(r"!\[[\w\. -]*\]\((?!http|file)([^\s,]*).*\)", markdown):
                 file_path = match.group(1).lstrip("./\\")
                 attachments.append(file_path)
-
-                if self.config["debug"]:
-                    print(f"DEBUG    - FOUND IMAGE: {file_path}")
-                attachments.append("docs/" + file_path.replace("../", ""))
-
         except AttributeError as e:
-            if self.config["debug"]:
-                print(f"DEBUG    - WARN(({e}): No images found in markdown. Proceed..")
-
+            log.debug(f"No images found in markdown. Proceeding. ({e})")
         return attachments
 
     def on_post_page(self, output, page, config):
         site_dir = config.get("site_dir")
         attachments = self.page_attachments.get(page.title, [])
-
-        log.debug("on_post_page: UPLOADING ATTACHMENTS TO CONFLUENCE FOR {page.title}, DETAILS:")
-        log.debug("on_post_page: FILES: {attachments}  \n")
-            
+        log.debug(f"on_post_page: UPLOADING ATTACHMENTS TO CONFLUENCE FOR {page.title}, FILES: {attachments}")
         for attachment in attachments:
-            log.debug("on_post_page: Looking for {attachment} in {site_dir}")   
+            log.debug(f"on_post_page: Looking for {attachment} in {site_dir}")   
             for p in Path(site_dir).rglob(f"*{attachment}"):
                 self.confluence_api.upsert_attachment(page.title, p)
         return output

@@ -6,6 +6,7 @@ import uuid
 import mistune
 from mistune.renderers.html import HTMLRenderer
 import os
+import re
 
 log = get_plugin_logger(__name__)
 
@@ -87,11 +88,27 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
         self.relative_links = list()
         self.title = None
         
+    def slugify(self, text):
+        """Generate a slug for anchor links (lowercase, dash-separated, alphanumeric only)."""
+        import re
+        slug = text.lower()
+        slug = re.sub(r'[^a-z0-9\s-]', '', slug)
+        slug = re.sub(r'\s+', '-', slug)
+        slug = re.sub(r'-+', '-', slug)
+        return slug.strip('-')
+
     def heading(self, text, level, **attrs):
         log.debug("ENTER heading")
         if self.strip_header and level == 1:
             return ""
-        return f'<h{level}>{text}</h{level}>'
+        anchor_id = self.slugify(text)
+        # Insert Confluence anchor macro before the heading
+        anchor_macro = (
+            f'<ac:structured-macro ac:name="anchor">'
+            f'<ac:parameter ac:name="">{anchor_id}</ac:parameter>'
+            f'</ac:structured-macro>'
+        )
+        return f'{anchor_macro}<h{level}>{text}</h{level}>'
 
     def paragraph(self, text, **attrs):
         log.debug("ENTER paragraph")
@@ -132,6 +149,10 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
 
     def link(self, text, url, title=None):
         parsed_link = urlparse(url)
+        # Handle anchor links (e.g., [Section](#section-title))
+        if url.startswith('#'):
+            # Render as a local anchor link
+            return f'<a href="{url}">{text}</a>'
         # Check for internal markdown link
         if (
             self.internal_link_map and
@@ -151,12 +172,9 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
                 './' + norm_path,
                 './' + (norm_path[:-3] if norm_path.endswith('.md') else norm_path),
             ]
-            print(f"DEBUG: candidates: {candidates}")
-            print(f"DEBUG: internal_link_map: {self.internal_link_map}")
             confluence_url = None
             for key in candidates:
                 if key in self.internal_link_map:
-                    print(f"DEBUG: Found internal link mapping: {key} -> {self.internal_link_map[key]}")
                     confluence_url = self.internal_link_map[key]
                     break
             if confluence_url:

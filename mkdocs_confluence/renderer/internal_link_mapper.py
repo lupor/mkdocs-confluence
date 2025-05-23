@@ -6,11 +6,15 @@ def rewrite_internal_links(markdown: str, page_link_map: dict) -> str:
     """
     Replace all internal markdown links with their Confluence URLs using the link text as the key.
     - If the link text (case-insensitive) matches a key in the dict, replace the URL with the value (Confluence link).
+    - If the link is an anchor (starts with #), keep it as a local anchor link.
     - If not found, keep the original URL.
     """
     def replacer(match):
         text = match.group(1).strip()
         url = match.group(2).strip()
+        # Anchor link (e.g., [Section](#section-title))
+        if url.startswith('#'):
+            return f'[{text}]({url})'
         # Case-insensitive lookup for the link text
         lookup_text = text.lower()
         page_link_map_lower = {k.lower(): v for k, v in page_link_map.items()}
