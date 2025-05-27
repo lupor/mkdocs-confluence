@@ -48,3 +48,84 @@ Use following config and adjust it according to your needs:
 - md2cf
 - mimetypes
 - mistune
+
+# MkDocs Confluence Plugin – Robust Internal Link & Heading Handling
+
+## Overview
+This plugin enables seamless publishing of MkDocs documentation to Confluence, with robust support for:
+- Internal markdown link rewriting (including anchor links and TOC)
+- Automatic mapping of internal links to Confluence URLs
+- Correct anchor/TOC navigation in Confluence
+- Removal of duplicate top-level headings (page titles)
+- Attachment management
+
+## Key Features
+
+### 1. Internal Link Rewriting
+- All internal markdown links are rewritten to point to the correct Confluence page URLs.
+- Anchor links (e.g., `[Section](#section-title)`) are preserved and work as expected in Confluence.
+- The mapping is case-insensitive and uses the link text as the key.
+- If a mapping is not found, the original URL is preserved.
+
+### 2. Anchor/TOC Support
+- Headings in the Confluence output include anchor macros, so TOC and anchor links work natively in Confluence.
+- The plugin ensures that clicking a TOC link jumps to the correct section.
+
+### 3. Duplicate Heading Removal
+- The first heading in the page content that exactly matches the page title (case-insensitive, stripped) is automatically removed from the HTML output.
+- This prevents duplicate titles in Confluence, even for nested pages.
+
+### 4. Attachment Handling
+- Local images and attachments are detected and uploaded to Confluence as page attachments.
+- Existing attachments are updated only if the file content changes.
+
+### 5. Hierarchical Page Publishing
+- The plugin ensures the correct parent/child hierarchy in Confluence, creating missing parent pages as needed.
+
+## Example Usage
+
+Suppose you have the following markdown:
+
+````markdown
+# Getting Started
+
+Welcome to the docs!
+
+## Table of Contents
+- [Introduction](#introduction)
+- [Usage](#usage)
+
+## Introduction
+This is the introduction.
+
+## Usage
+See [Advanced Guide](Advanced Guide) for more info.
+
+# Getting Started
+
+This is a duplicate heading and will be removed.
+````
+
+### What happens when you publish to Confluence:
+- The first `# Getting Started` is removed (since it matches the page title).
+- The TOC links (`[Introduction](#introduction)`, `[Usage](#usage)`) work in Confluence and jump to the correct section.
+- The link `[Advanced Guide](Advanced Guide)` is rewritten to the correct Confluence page URL if it exists.
+- Any local images are uploaded as attachments.
+
+## How to Use
+1. Install the plugin and configure it in your `mkdocs.yml`.
+2. Run your MkDocs build/publish process as usual.
+3. The plugin will handle all internal link rewriting, heading cleanup, and attachment management automatically.
+
+## Developer Notes
+- See `plugin.py` for the main plugin logic and page processing.
+- See `renderer/confluence_xhtml_renderer.py` for heading/anchor rendering.
+- See `renderer/internal_link_mapper.py` for internal link rewriting logic.
+- See `confluence_api/confluence_api.py` for Confluence API integration and attachment handling.
+
+## Testing
+A test is provided in `tests/test_heading_removal.py` to verify that only the first heading matching the page title is removed.
+
+---
+
+**This plugin ensures your MkDocs documentation is published to Confluence with correct navigation, clean headings, and robust internal linking—no manual fixes required!**
