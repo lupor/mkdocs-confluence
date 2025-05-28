@@ -59,6 +59,26 @@ This plugin enables seamless publishing of MkDocs documentation to Confluence, w
 - Removal of duplicate top-level headings (page titles)
 - Attachment management
 
+## Important Rule for Internal Markdown Links
+
+When linking to another markdown file, **the link text must exactly match the target file name (without the `.md` extension) and the Confluence page name (which is taken from the first heading in the target markdown file)**. This match is case-insensitive, but the text must otherwise be identical.
+
+- If the link text does not match the file name and Confluence page name, the plugin will not be able to rewrite the link to the correct Confluence page URL.
+
+**Correct format:**
+
+````markdown
+[sample document](./sample document.md)
+````
+
+**Wrong format:**
+
+````markdown
+[sample file](./sample document.md)
+````
+
+> The link text (`sample document`) must match the file name (`sample document.md`) and the first heading in that file (which becomes the Confluence page name). If there is a mismatch, internal links will not work properly in Confluence.
+
 ## Key Features
 
 ### 1. Internal Link Rewriting
