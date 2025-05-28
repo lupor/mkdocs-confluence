@@ -102,6 +102,31 @@ When linking to another markdown file, **the link text must exactly match the ta
 ### 5. Hierarchical Page Publishing
 - The plugin ensures the correct parent/child hierarchy in Confluence, creating missing parent pages as needed.
 
+### 6. Strict Parent Page Placement
+- You must provide a `parent_page_name` in your `mkdocs.yml` configuration.
+- All pages described in your `nav` section will be created strictly under this specified parent page in Confluence.
+- If the parent page does not exist in the current Confluence space, the plugin will automatically create it before publishing your documentation hierarchy.
+
+> This ensures your documentation structure in Confluence always starts under the correct parent, and prevents orphaned or misplaced pages.
+
+### 7. Page-Specific Attachment Handling
+- All attachments (such as images, PDFs, and other files) referenced in a markdown file are uploaded and attached to the corresponding Confluence page.
+- This ensures that each Confluence page contains only its relevant attachments, keeping your documentation organized.
+
+### 8. Accurate Code Snippet Rendering
+- Code blocks and inline code are rendered correctly in Confluence, preserving formatting, syntax highlighting, and indentation.
+- This ensures technical documentation and examples are easy to read and copy from Confluence.
+
+### 9. Table Rendering Support
+- Markdown tables are converted and rendered as proper Confluence tables.
+- Table formatting, alignment, and content are preserved for clear and professional documentation.
+
+### 10. Draw.io Diagram Support
+- Draw.io diagrams referenced in markdown files are exported as images and uploaded as attachments to the relevant Confluence page.
+- The diagrams are displayed as images within the page content, ensuring visual documentation is preserved.
+
+> These features ensure your documentation—including attachments, code, tables, and diagrams—appears in Confluence as intended, with no manual fixes required.
+
 ## Example Usage
 
 Suppose you have the following markdown:
