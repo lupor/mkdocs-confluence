@@ -198,14 +198,14 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
     def block_code(self, code, info=None):
         log.debug("ENTER block_code")
         # TODO: handle mermaid diagrams
-        
-        key = info.split(None, 1)[0]
+        if info is not None:
+            key = info.split(None, 1)[0]
+        else:
+            key = ''
         language = map_language_to_confluence(key)
-        
         root_element = self.structured_macro("code")
         lang_parameter = self.parameter(name="language", value=language)
         root_element.append(lang_parameter)
-            
         root_element.append(self.parameter(name="linenumbers", value="true"))
         root_element.append(self.plain_text_body(code))
         return root_element.render()
