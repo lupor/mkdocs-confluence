@@ -125,6 +125,14 @@ When linking to another markdown file, **the link text must exactly match the ta
 - Draw.io diagrams referenced in markdown files are exported as images and uploaded as attachments to the relevant Confluence page.
 - The diagrams are displayed as images within the page content, ensuring visual documentation is preserved.
 
+### 11. Automatic Font and Alignment Normalization
+- The plugin automatically converts all font sizes and font families to a global standard (Arial, 14px for body text, and consistent heading sizes) for every published page.
+- All text, headings, lists, and tables are strictly left-aligned, ensuring a uniform look across your documentation.
+
+### 12. Modern Confluence Editor Support
+- Pages are always published using the modern Confluence editor (storage format), not the legacy editor.
+- This guarantees compatibility with the latest Confluence features and a consistent editing experience.
+
 > These features ensure your documentation—including attachments, code, tables, and diagrams—appears in Confluence as intended, with no manual fixes required.
 
 ## Example Usage

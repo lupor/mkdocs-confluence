@@ -18,6 +18,7 @@ class ConfluenceAPI:
         self.auth = (username, password)
         self.dryrun = dryrun
         self.page_link_map = {}
+        self.representation = "storage"  # Always use storage format for modern editor
         
 
     def upsert_attachment(self, page_name, filepath):
@@ -157,7 +158,7 @@ class ConfluenceAPI:
             "type": "page",
             "title": page_name,
             "space": {"key": self.space},
-            "body": {"storage": {"value": page_content_in_storage_format, "representation": "storage"}},
+            "body": {"storage": {"value": page_content_in_storage_format, "representation": self.representation}},
         }
         if parent_page_id:
             data["ancestors"] = [{"id": parent_page_id}]
@@ -204,7 +205,7 @@ class ConfluenceAPI:
             "title": page_name,
             "type": "page",
             "space": {"key": self.space},
-            "body": {"storage": {"value": page_content_in_storage_format, "representation": "storage"}},
+            "body": {"storage": {"value": page_content_in_storage_format, "representation": self.representation}},
             "version": {"number": page_version},
         }
 

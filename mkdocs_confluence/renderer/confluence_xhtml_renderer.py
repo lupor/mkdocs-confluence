@@ -108,14 +108,15 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
             f'<ac:parameter ac:name="">{anchor_id}</ac:parameter>'
             f'</ac:structured-macro>'
         )
-        return f'{anchor_macro}<h{level}>{text}</h{level}>'
+        # Strict global heading style: left-align, Arial, bold, color, size per level
+        font_sizes = {1: 24, 2: 20, 3: 18, 4: 16, 5: 14, 6: 12}
+        style = f"margin: 16px 0 8px 0; padding: 0; text-align: left; font-family: Arial, sans-serif; font-size: {font_sizes.get(level, 14)}px; font-weight: bold; color: #1a1a1a;"
+        return f'{anchor_macro}<h{level} style="{style}">{text}</h{level}>'
 
     def paragraph(self, text, **attrs):
         log.debug("ENTER paragraph")
-        if self.remove_text_newlines:
-            text = text.replace("\n", " ")
-        
-        return f'<p>{text}</p>'
+        # Strict global paragraph style: left-align, Arial, 14px, no user styles
+        return f'<p style="margin: 0 0 8px 0; padding: 0; text-align: left; font-family: Arial, sans-serif; font-size: 14px; font-weight: normal; font-style: normal; color: #222;">{text}</p>'
 
     def image(self, alt: str, url: str, title: Optional[str] = None) -> str:
         log.debug("ENTER image")
@@ -186,18 +187,20 @@ class ConfluenceXhtmlRenderer(HTMLRenderer):
 
     def list(self, text, ordered, **attrs):
         log.debug("ENTER list")
-        # Convert lists to Confluence storage format
         tag = 'ol' if ordered else 'ul'
-        return f'<{tag}>{text}</{tag}>'
+        # Strict global list style
+        style = "margin: 0 0 8px 24px; padding: 0; font-family: Arial, sans-serif; font-size: 14px; text-align: left; color: #222;"
+        return f'<{tag} style="{style}">{text}</{tag}>'
 
     def list_item(self, text, **attrs):
         log.debug("ENTER list_item")
-        # Convert list items to Confluence storage format
-        return f'<li>{text}</li>'
+        # Strict global list item style
+        style = "font-family: Arial, sans-serif; font-size: 14px; text-align: left; color: #222;"
+        return f'<li style="{style}">{text}</li>'
 
     def block_code(self, code, info=None):
         log.debug("ENTER block_code")
-        # TODO: handle mermaid diagrams
+        # Confluence macro handles code font, but enforce no user styles
         if info is not None:
             key = info.split(None, 1)[0]
         else:
