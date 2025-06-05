@@ -182,7 +182,6 @@ class ConfluenceAPI:
                             self.page_link_map = {}
                         self.page_link_map[page_name] = page_url
                         print(f"DEBUG: Published page mapping: {page_name} -> {page_url}")
-                        print(f"DEBUG: Current page link map: {self.page_link_map}")
                     return True
         except Exception as e:
             return False
@@ -226,8 +225,7 @@ class ConfluenceAPI:
                             self.page_link_map = {}
                         self.page_link_map[page_name] = page_url
                         print(f"DEBUG: Published page mapping: {page_name} -> {page_url}")
-                        print(f"DEBUG: Current page link map: {self.page_link_map}")
-                    return True
+                        return True
         except Exception as e:
             #log.error(f"update_page: Failed to update page {page_name}. Error: {e}")
             return False
