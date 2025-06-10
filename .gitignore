@@ -1,2 +1,6 @@
-mkdocs_with_confluence/__pycache__/*
-mkdocs_with_confluence.egg-info/*
+**/__pycache__
+mkdocs_confluence.egg-info
+**/build
+**/vscode
+.venv
+**/.pytest_cache
